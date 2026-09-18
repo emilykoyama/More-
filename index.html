@@ -46,6 +46,532 @@ nav::-webkit-scrollbar{display:none}
 .tab.on{color:var(--ink);font-weight:600;background:var(--bg);
  border-color:var(--line);padding-bottom:11px;z-index:2}
 .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--bg)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--line-strong)}
+.tab.on .dot{background:var(--good)}
+.tab .dot.off{background:var(--line-strong)}
+#main{padding:32px 24px 80px}
+section{margin-bottom:34px}
+.sechead{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.sechead h2{font-size:16px;letter-spacing:-.02em;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:11px;
+ box-shadow:var(--shadow);padding:15px 17px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:11px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:11px;
+ padding:12px 14px 11px;box-shadow:var(--shadow)}
+.kpi .lab{font-size:12px;color:var(--ink-2);font-weight:500}
+.kpi .val{font-size:25px;font-weight:600;letter-spacing:-.03em;line-height:1.18}
+.kpi .val.dim{color:var(--ink-3)}
+.tw{overflow-x:auto}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;min-width:440px}
+th{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:600;
+ letter-spacing:.05em;text-transform:uppercase;background:var(--hd-bg);color:var(--hd-fg);
+ padding:10px 14px;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;border-top-left-radius:7px;border-bottom-left-radius:0}
+th:last-child{border-top-right-radius:7px}
+td{padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right;
+ font-variant-numeric:tabular-nums}
+td:first-child{text-align:left;font-weight:500}
+tbody tr:last-child td{border-bottom:0}
+td.empty{text-align:center;color:var(--ink-3);font-style:italic}
+.msg{border-radius:10px;padding:13px 15px;font-size:13.5px;line-height:1.55;margin-bottom:16px}
+.msg.info{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.msg.err{background:var(--crit-bg);color:var(--crit-fg)}
+.msg.wait{background:var(--note-bg);color:var(--note-fg);border:1px solid var(--note-edge)}
+.stale{font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;margin-top:9px}
+.skel{background:var(--surface-3);border-radius:6px;height:1em;animation:p 1.4s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:.55}50%{opacity:.95}}
+@media (max-width:640px){.wrap{padding:0 15px}#main{padding:26px 15px 60px}.kpi .val{font-size:22px}}
+</style></head><body>
+
+<header><div class="wrap">
+ <div class="hrow">
+  <div class="brand"><span class="eyebrow">Launch tracker · live</span><b>More Nutrition US</b></div>
+  <div class="ctrls">
+   <select id="range">
+    <option value="7">Last 7 days</option>
+    <option value="30" selected>Last 30 days</option>
+    <option value="90">Last 90 days</option>
+   </select>
+   <button id="refresh">Refresh</button>
+  </div>
+ </div>
+ <nav id="nav"></nav>
+</div></header>
+
+<main class="wrap" id="main"></main>
+
+<script>
+const $ = s => document.querySelector(s);
+const money = v => v==null||!isFinite(v) ? "—" : "$"+Math.round(v).toLocaleString("en-US");
+const num = v => v==null||!isFinite(v) ? "—" : Math.round(v).toLocaleString("en-US");
+const pct = v => v==null||!isFinite(v) ? "—" : (v*100).toFixed(2)+"%";
+const ratio = v => v==null||!isFinite(v) ? "—" : v.toFixed(2)+"x";
+
+// Tabs mirror the full dashboard's channel line-up. Only Paid media is wired to
+// a live source on this deployment right now — the others show their full shell
+// (KPI cards + table) with placeholder values until their data source is connected.
+const TABS=[
+ {k:"overview",label:"Overview",live:false},
+ {k:"paid",label:"Paid media",live:true},
+ {k:"web",label:"Web / Shopify",live:false},
+ {k:"tiktok",label:"TikTok Shop",live:false},
+ {k:"amazon",label:"Amazon",live:false},
+ {k:"email",label:"Email / CRM",live:false}
+];
+
+// Shell config for every non-live tab: which KPI cards and table columns to show,
+// all populated with placeholder dashes until the real data source is wired up.
+const SHELLS={
+ web:{kpis:["Revenue","Orders","AOV","Sessions","Conversion rate"],
+  cols:["Date","Revenue","Orders","AOV","Sessions"]},
+ tiktok:{kpis:["GMV","Orders","Units sold","Views","Conversion rate"],
+  cols:["Date","GMV","Orders","Units sold","Views"]},
+ amazon:{kpis:["Sales","Units sold","Sessions","Conversion rate","ACOS"],
+  cols:["Date","Sales","Units sold","Sessions","ACOS"]},
+ email:{kpis:["Revenue","Campaigns sent","Open rate","Click rate","Unsubscribe rate"],
+  cols:["Campaign","Sent","Open rate","Click rate","Revenue"]}
+};
+
+let tab="paid";
+let fbRows=[];
+
+function renderNav(){
+ $("#nav").innerHTML=TABS.map(t=>
+  `<div class="tab ${t.k===tab?"on":"off"}" data-tab="${t.k}"><span class="dot ${t.live?"":"off"}"></span>${t.label}</div>`
+ ).join("");
+ $("#nav").querySelectorAll(".tab").forEach(el=>{
+  el.addEventListener("click",()=>{
+   tab=el.dataset.tab; renderNav(); renderMain();
+  });
+ });
+}
+
+function shellSection(key,label){
+ const cfg=SHELLS[key];
+ const kpis=cfg.kpis.map(lab=>
+  `<div class="kpi"><div class="lab">${lab}</div><div class="val dim">—</div></div>`
+ ).join("");
+ const table=`<div class="tw"><table><thead><tr>
+   ${cfg.cols.map(c=>`<th>${c}</th>`).join("")}
+  </tr></thead><tbody>
+   <tr><td class="empty" colspan="${cfg.cols.length}">No data yet — connect ${label} to populate this table</td></tr>
+  </tbody></table></div>`;
+ return `<div class="msg wait"><b>${label} isn't connected on this dashboard yet.</b> The layout below is ready to go — figures will populate here once its data source is wired up.</div>
+  <div class="kpis">${kpis}</div>${table}`;
+}
+
+function paidMediaSection(){
+ if(!fbRows.length){
+  return `<div class="msg info">No Facebook Ads data for this date range yet.</div>`;
+ }
+ const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,impressions:a.impressions+r.impressions,
+  clicks:a.clicks+r.clicks,purchases:a.purchases+r.purchases,purchase_value:a.purchase_value+r.purchase_value}),
+  {spend:0,impressions:0,clicks:0,purchases:0,purchase_value:0});
+ const roas=tot.spend?tot.purchase_value/tot.spend:null;
+ const cpc=tot.clicks?tot.spend/tot.clicks:null;
+ const ctr=tot.impressions?tot.clicks/tot.impressions:null;
+ const cpa=tot.purchases?tot.spend/tot.purchases:null;
+
+ const kpis=[["Spend",money(tot.spend)],["Purchase value",money(tot.purchase_value)],
+  ["ROAS",ratio(roas)],["Purchases",num(tot.purchases)],["Cost / purchase",money(cpa)],
+  ["Clicks",num(tot.clicks)],["CTR",pct(ctr)],["CPC",money(cpc)],["Impressions",num(tot.impressions)]
+ ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val">${val}</div></div>`).join("");
+
+ const sorted=[...fbRows].sort((a,b)=>a.date<b.date?1:-1);
+ const table=`<div class="tw"><table><thead><tr>
+   <th>Date</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>CTR</th>
+   <th>Purchases</th><th>Purchase value</th><th>ROAS</th></tr></thead><tbody>
+  ${sorted.map(r=>{
+   const rRoas=r.spend?r.purchase_value/r.spend:null, rCtr=r.impressions?r.clicks/r.impressions:null;
+   return `<tr><td>${r.date}</td><td>${money(r.spend)}</td><td>${num(r.impressions)}</td>
+    <td>${num(r.clicks)}</td><td>${pct(rCtr)}</td><td>${num(r.purchases)}</td>
+    <td>${money(r.purchase_value)}</td><td>${ratio(rRoas)}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+
+ return `<div class="kpis">${kpis}</div>${table}`;
+}
+
+function overviewSection(){
+ const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,purchase_value:a.purchase_value+r.purchase_value}),
+  {spend:0,purchase_value:0});
+ const roas=tot.spend?tot.purchase_value/tot.spend:null;
+ const kpis=[["Total revenue","—"],["Ad spend",fbRows.length?money(tot.spend):"—"],
+  ["Blended ROAS",fbRows.length?ratio(roas):"—"],["Orders","—"],["New customers","—"],["Email revenue","—"]
+ ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val ${val==="—"?"dim":""}">${val}</div></div>`).join("");
+
+ const rows=[
+  ["Paid media",fbRows.length?money(tot.spend):"—",fbRows.length?money(tot.purchase_value):"—",fbRows.length?ratio(roas):"—"],
+  ["Web / Shopify","—","—","—"],
+  ["TikTok Shop","—","—","—"],
+  ["Amazon","—","—","—"],
+  ["Email / CRM","—","—","—"]
+ ];
+ const table=`<div class="tw"><table><thead><tr>
+   <th>Channel</th><th>Spend</th><th>Revenue</th><th>ROAS</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")}
+  </tbody></table></div>`;
+
+ return `<div class="msg info">Overview blends every connected channel — right now that's just Paid media. Connect Shopify, TikTok, Amazon and Email to fill in the rest.</div>
+  <div class="kpis">${kpis}</div>${table}`;
+}
+
+function renderMain(){
+ const t=TABS.find(x=>x.k===tab);
+ let body;
+ if(tab==="paid")body=paidMediaSection();
+ else if(tab==="overview")body=overviewSection();
+ else body=shellSection(tab,t.label);
+
+ $("#main").innerHTML=`<section><div class="sechead"><h2>${t.label}</h2></div>${body}
+  <div class="stale" id="stale"></div></section>`;
+}
+
+function isoDaysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)}
+
+async function loadFacebook(){
+ const days=Number($("#range").value);
+ const since=isoDaysAgo(days-1), until=isoDaysAgo(0);
+ $("#main").innerHTML=`<section><div class="sechead"><h2>${TABS.find(x=>x.k===tab).label}</h2></div>
+  <div class="card"><div class="skel" style="width:38%"></div>
+  <div class="skel" style="width:64%;margin-top:9px"></div></div></section>`;
+ try{
+  const res=await fetch(`/api/facebook?since=${since}&until=${until}`);
+  const data=await res.json();
+  if(!res.ok||data.error){
+   fbRows=[];
+   renderMain();
+   const sec=$("#main section");
+   sec.insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Facebook data.</b><br>${(data&&data.error)||res.statusText}</div>`);
+   return;
+  }
+  fbRows=data.rows||[];
+  renderMain();
+  const st=$("#stale"); if(st)st.textContent="Last refreshed "+new Date().toLocaleTimeString();
+ }catch(e){
+  fbRows=[];
+  renderMain();
+  const sec=$("#main section");
+  sec.insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Something went wrong.</b><br>${String(e)}</div>`);
+ }
+}
+
+$("#refresh").addEventListener("click",loadFacebook);
+$("#range").addEventListener("change",loadFacebook);
+renderNav();
+loadFacebook();
+</script>
+</body></html>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>More Nutrition US</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{color-scheme:light;
+ --bg:#fbfbf9;--surface:#fff;--surface-2:#f4f5f1;--surface-3:#eaece5;
+ --ink:#12140f;--ink-2:#55584f;--ink-3:#8a8d82;
+ --line:#e3e5dd;--line-strong:#c9ccc1;--accent:#0f5257;
+ --good:#0ca30c;--good-bg:#e3f5e3;--good-fg:#0a6b0a;
+ --crit:#d03b3b;--crit-bg:#fae4e4;--crit-fg:#9c2626;
+ --hd-bg:#0f5257;--hd-fg:#eaf5f4;
+ --note-bg:#fdf8e0;--note-edge:#d9a520;--note-fg:#8a6608;
+ --shadow:0 1px 2px rgba(18,20,15,.05)}<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>More Nutrition US</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{color-scheme:light;
+ --bg:#fbfbf9;--surface:#fff;--surface-2:#f4f5f1;--surface-3:#eaece5;
+ --ink:#12140f;--ink-2:#55584f;--ink-3:#8a8d82;
+ --line:#e3e5dd;--line-strong:#c9ccc1;--accent:#0f5257;
+ --good:#0ca30c;--good-bg:#e3f5e3;--good-fg:#0a6b0a;
+ --crit:#d03b3b;--crit-bg:#fae4e4;--crit-fg:#9c2626;
+ --hd-bg:#0f5257;--hd-fg:#eaf5f4;
+ --note-bg:#fdf8e0;--note-edge:#d9a520;--note-fg:#8a6608;
+ --shadow:0 1px 2px rgba(18,20,15,.05)}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;
+ --bg:#101210;--surface:#191c19;--surface-2:#20241f;--surface-3:#282c26;
+ --ink:#f4f6f0;--ink-2:#b6bab0;--ink-3:#82867c;
+ --line:#2b2f2a;--line-strong:#3d423b;--accent:#6fd3cf;
+ --good-bg:#12301a;--good-fg:#4fd14f;--crit-bg:#331818;--crit-fg:#ef7676;
+ --hd-bg:#14484c;--hd-fg:#dff0ee;--shadow:none;
+ --note-bg:#272117;--note-edge:#e3b544;--note-fg:#edc86a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Archivo,Arial,sans-serif;
+ font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+.mono{font-family:"IBM Plex Mono",monospace}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+ text-transform:uppercase;color:var(--ink-3)}
+header{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.hrow{display:flex;align-items:flex-end;gap:16px;padding:13px 0 11px;flex-wrap:wrap}
+.brand{margin-right:auto}
+.brand b{font-size:18px;font-weight:700;letter-spacing:-.025em;display:block}
+.ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,button{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);
+ border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;cursor:pointer}
+select:hover,button:hover{border-color:var(--ink-3)}
+nav{display:flex;gap:3px;align-items:flex-end;overflow-x:auto;scrollbar-width:none;
+ padding-top:9px;margin-bottom:-1px;position:relative;z-index:1}
+nav::-webkit-scrollbar{display:none}
+.tab{border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;
+ padding:8px 14px 9px;font-size:13.5px;font-weight:500;color:var(--ink-2);
+ background:transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;
+ position:relative;cursor:pointer}
+.tab:hover{color:var(--ink);background:var(--surface-2)}
+.tab.on{color:var(--ink);font-weight:600;background:var(--bg);
+ border-color:var(--line);padding-bottom:11px;z-index:2}
+.tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--bg)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--line-strong)}
+.tab.on .dot{background:var(--good)}
+.tab .dot.off{background:var(--line-strong)}
+#main{padding:32px 24px 80px}
+section{margin-bottom:34px}
+.sechead{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.sechead h2{font-size:16px;letter-spacing:-.02em;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:11px;
+ box-shadow:var(--shadow);padding:15px 17px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:11px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:11px;
+ padding:12px 14px 11px;box-shadow:var(--shadow)}
+.kpi .lab{font-size:12px;color:var(--ink-2);font-weight:500}
+.kpi .val{font-size:25px;font-weight:600;letter-spacing:-.03em;line-height:1.18}
+.kpi .val.dim{color:var(--ink-3)}
+.tw{overflow-x:auto}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;min-width:440px}
+th{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:600;
+ letter-spacing:.05em;text-transform:uppercase;background:var(--hd-bg);color:var(--hd-fg);
+ padding:10px 14px;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;border-top-left-radius:7px;border-bottom-left-radius:0}
+th:last-child{border-top-right-radius:7px}
+td{padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right;
+ font-variant-numeric:tabular-nums}
+td:first-child{text-align:left;font-weight:500}
+tbody tr:last-child td{border-bottom:0}
+td.empty{text-align:center;color:var(--ink-3);font-style:italic}
+.msg{border-radius:10px;padding:13px 15px;font-size:13.5px;line-height:1.55;margin-bottom:16px}
+.msg.info{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.msg.err{background:var(--crit-bg);color:var(--crit-fg)}
+.msg.wait{background:var(--note-bg);color:var(--note-fg);border:1px solid var(--note-edge)}
+.stale{font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;margin-top:9px}
+.skel{background:var(--surface-3);border-radius:6px;height:1em;animation:p 1.4s ease-in-out infinite}
+@keyframes p{0%,100%{opacity:.55}50%{opacity:.95}}
+@media (max-width:640px){.wrap{padding:0 15px}#main{padding:26px 15px 60px}.kpi .val{font-size:22px}}
+</style></head><body>
+
+<header><div class="wrap">
+ <div class="hrow">
+  <div class="brand"><span class="eyebrow">Launch tracker · live</span><b>More Nutrition US</b></div>
+  <div class="ctrls">
+   <select id="range">
+    <option value="7">Last 7 days</option>
+    <option value="30" selected>Last 30 days</option>
+    <option value="90">Last 90 days</option>
+   </select>
+   <button id="refresh">Refresh</button>
+  </div>
+ </div>
+ <nav id="nav"></nav>
+</div></header>
+
+<main class="wrap" id="main"></main>
+
+<script>
+const $ = s => document.querySelector(s);
+const money = v => v==null||!isFinite(v) ? "—" : "$"+Math.round(v).toLocaleString("en-US");
+const num = v => v==null||!isFinite(v) ? "—" : Math.round(v).toLocaleString("en-US");
+const pct = v => v==null||!isFinite(v) ? "—" : (v*100).toFixed(2)+"%";
+const ratio = v => v==null||!isFinite(v) ? "—" : v.toFixed(2)+"x";
+
+// Tabs mirror the full dashboard's channel line-up. Only Paid media is wired to
+// a live source on this deployment right now — the others show their full shell
+// (KPI cards + table) with placeholder values until their data source is connected.
+const TABS=[
+ {k:"overview",label:"Overview",live:false},
+ {k:"paid",label:"Paid media",live:true},
+ {k:"web",label:"Web / Shopify",live:false},
+ {k:"tiktok",label:"TikTok Shop",live:false},
+ {k:"amazon",label:"Amazon",live:false},
+ {k:"email",label:"Email / CRM",live:false}
+];
+
+// Shell config for every non-live tab: which KPI cards and table columns to show,
+// all populated with placeholder dashes until the real data source is wired up.
+const SHELLS={
+ web:{kpis:["Revenue","Orders","AOV","Sessions","Conversion rate"],
+  cols:["Date","Revenue","Orders","AOV","Sessions"]},
+ tiktok:{kpis:["GMV","Orders","Units sold","Views","Conversion rate"],
+  cols:["Date","GMV","Orders","Units sold","Views"]},
+ amazon:{kpis:["Sales","Units sold","Sessions","Conversion rate","ACOS"],
+  cols:["Date","Sales","Units sold","Sessions","ACOS"]},
+ email:{kpis:["Revenue","Campaigns sent","Open rate","Click rate","Unsubscribe rate"],
+  cols:["Campaign","Sent","Open rate","Click rate","Revenue"]}
+};
+
+let tab="paid";
+let fbRows=[];
+
+function renderNav(){
+ $("#nav").innerHTML=TABS.map(t=>
+  `<div class="tab ${t.k===tab?"on":"off"}" data-tab="${t.k}"><span class="dot ${t.live?"":"off"}"></span>${t.label}</div>`
+ ).join("");
+ $("#nav").querySelectorAll(".tab").forEach(el=>{
+  el.addEventListener("click",()=>{
+   tab=el.dataset.tab; renderNav(); renderMain();
+  });
+ });
+}
+
+function shellSection(key,label){
+ const cfg=SHELLS[key];
+ const kpis=cfg.kpis.map(lab=>
+  `<div class="kpi"><div class="lab">${lab}</div><div class="val dim">—</div></div>`
+ ).join("");
+ const table=`<div class="tw"><table><thead><tr>
+   ${cfg.cols.map(c=>`<th>${c}</th>`).join("")}
+  </tr></thead><tbody>
+   <tr><td class="empty" colspan="${cfg.cols.length}">No data yet — connect ${label} to populate this table</td></tr>
+  </tbody></table></div>`;
+ return `<div class="msg wait"><b>${label} isn't connected on this dashboard yet.</b> The layout below is ready to go — figures will populate here once its data source is wired up.</div>
+  <div class="kpis">${kpis}</div>${table}`;
+}
+
+function paidMediaSection(){
+ if(!fbRows.length){
+  return `<div class="msg info">No Facebook Ads data for this date range yet.</div>`;
+ }
+ const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,impressions:a.impressions+r.impressions,
+  clicks:a.clicks+r.clicks,purchases:a.purchases+r.purchases,purchase_value:a.purchase_value+r.purchase_value}),
+  {spend:0,impressions:0,clicks:0,purchases:0,purchase_value:0});
+ const roas=tot.spend?tot.purchase_value/tot.spend:null;
+ const cpc=tot.clicks?tot.spend/tot.clicks:null;
+ const ctr=tot.impressions?tot.clicks/tot.impressions:null;
+ const cpa=tot.purchases?tot.spend/tot.purchases:null;
+
+ const kpis=[["Spend",money(tot.spend)],["Purchase value",money(tot.purchase_value)],
+  ["ROAS",ratio(roas)],["Purchases",num(tot.purchases)],["Cost / purchase",money(cpa)],
+  ["Clicks",num(tot.clicks)],["CTR",pct(ctr)],["CPC",money(cpc)],["Impressions",num(tot.impressions)]
+ ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val">${val}</div></div>`).join("");
+
+ const sorted=[...fbRows].sort((a,b)=>a.date<b.date?1:-1);
+ const table=`<div class="tw"><table><thead><tr>
+   <th>Date</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>CTR</th>
+   <th>Purchases</th><th>Purchase value</th><th>ROAS</th></tr></thead><tbody>
+  ${sorted.map(r=>{
+   const rRoas=r.spend?r.purchase_value/r.spend:null, rCtr=r.impressions?r.clicks/r.impressions:null;
+   return `<tr><td>${r.date}</td><td>${money(r.spend)}</td><td>${num(r.impressions)}</td>
+    <td>${num(r.clicks)}</td><td>${pct(rCtr)}</td><td>${num(r.purchases)}</td>
+    <td>${money(r.purchase_value)}</td><td>${ratio(rRoas)}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+
+ return `<div class="kpis">${kpis}</div>${table}`;
+}
+
+function overviewSection(){
+ const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,purchase_value:a.purchase_value+r.purchase_value}),
+  {spend:0,purchase_value:0});
+ const roas=tot.spend?tot.purchase_value/tot.spend:null;
+ const kpis=[["Total revenue","—"],["Ad spend",fbRows.length?money(tot.spend):"—"],
+  ["Blended ROAS",fbRows.length?ratio(roas):"—"],["Orders","—"],["New customers","—"],["Email revenue","—"]
+ ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val ${val==="—"?"dim":""}">${val}</div></div>`).join("");
+
+ const rows=[
+  ["Paid media",fbRows.length?money(tot.spend):"—",fbRows.length?money(tot.purchase_value):"—",fbRows.length?ratio(roas):"—"],
+  ["Web / Shopify","—","—","—"],
+  ["TikTok Shop","—","—","—"],
+  ["Amazon","—","—","—"],
+  ["Email / CRM","—","—","—"]
+ ];
+ const table=`<div class="tw"><table><thead><tr>
+   <th>Channel</th><th>Spend</th><th>Revenue</th><th>ROAS</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")}
+  </tbody></table></div>`;
+
+ return `<div class="msg info">Overview blends every connected channel — right now that's just Paid media. Connect Shopify, TikTok, Amazon and Email to fill in the rest.</div>
+  <div class="kpis">${kpis}</div>${table}`;
+}
+
+function renderMain(){
+ const t=TABS.find(x=>x.k===tab);
+ let body;
+ if(tab==="paid")body=paidMediaSection();
+ else if(tab==="overview")body=overviewSection();
+ else body=shellSection(tab,t.label);
+
+ $("#main").innerHTML=`<section><div class="sechead"><h2>${t.label}</h2></div>${body}
+  <div class="stale" id="stale"></div></section>`;
+}
+
+function isoDaysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)}
+
+async function loadFacebook(){
+ const days=Number($("#range").value);
+ const since=isoDaysAgo(days-1), until=isoDaysAgo(0);
+ $("#main").innerHTML=`<section><div class="sechead"><h2>${TABS.find(x=>x.k===tab).label}</h2></div>
+  <div class="card"><div class="skel" style="width:38%"></div>
+  <div class="skel" style="width:64%;margin-top:9px"></div></div></section>`;
+ try{
+  const res=await fetch(`/api/facebook?since=${since}&until=${until}`);
+  const data=await res.json();
+  if(!res.ok||data.error){
+   fbRows=[];
+   renderMain();
+   const sec=$("#main section");
+   sec.insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Facebook data.</b><br>${(data&&data.error)||res.statusText}</div>`);
+   return;
+  }
+  fbRows=data.rows||[];
+  renderMain();
+  const st=$("#stale"); if(st)st.textContent="Last refreshed "+new Date().toLocaleTimeString();
+ }catch(e){
+  fbRows=[];
+  renderMain();
+  const sec=$("#main section");
+  sec.insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Something went wrong.</b><br>${String(e)}</div>`);
+ }
+}
+
+$("#refresh").addEventListener("click",loadFacebook);
+$("#range").addEventListener("change",loadFacebook);
+renderNav();
+loadFacebook();
+</script>
+</body></html>
+
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;
+ --bg:#101210;--surface:#191c19;--surface-2:#20241f;--surface-3:#282c26;
+ --ink:#f4f6f0;--ink-2:#b6bab0;--ink-3:#82867c;
+ --line:#2b2f2a;--line-strong:#3d423b;--accent:#6fd3cf;
+ --good-bg:#12301a;--good-fg:#4fd14f;--crit-bg:#331818;--crit-fg:#ef7676;
+ --hd-bg:#14484c;--hd-fg:#dff0ee;--shadow:none;
+ --note-bg:#272117;--note-edge:#e3b544;--note-fg:#edc86a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Archivo,Arial,sans-serif;
+ font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+.mono{font-family:"IBM Plex Mono",monospace}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
+ text-transform:uppercase;color:var(--ink-3)}
+header{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.hrow{display:flex;align-items:flex-end;gap:16px;padding:13px 0 11px;flex-wrap:wrap}
+.brand{margin-right:auto}
+.brand b{font-size:18px;font-weight:700;letter-spacing:-.025em;display:block}
+.ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,button{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);
+ border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;cursor:pointer}
+select:hover,button:hover{border-color:var(--ink-3)}
+nav{display:flex;gap:3px;align-items:flex-end;overflow-x:auto;scrollbar-width:none;
+ padding-top:9px;margin-bottom:-1px;position:relative;z-index:1}
+nav::-webkit-scrollbar{display:none}
+.tab{border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;
+ padding:8px 14px 9px;font-size:13.5px;font-weight:500;color:var(--ink-2);
+ background:transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;
+ position:relative;cursor:pointer}
+.tab:hover{color:var(--ink);background:var(--surface-2)}
+.tab.on{color:var(--ink);font-weight:600;background:var(--bg);
+ border-color:var(--line);padding-bottom:11px;z-index:2}
+.tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--bg)}
 .tab.off{opacity:.45;cursor:default}
 .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--line-strong)}
 .tab.on .dot{background:var(--good)}
