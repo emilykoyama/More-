@@ -1,9 +1,19 @@
 export default async function handler(req, res) {
   const token = process.env.FACEBOOK_ACCESS_TOKEN;
-  const adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID; // e.g. act_123456789012345
+  let adAccountId = process.env.FACEBOOK_AD_ACCOUNT_ID; // e.g. act_123456789012345
 
   if (!token || !adAccountId) {
     return res.status(500).json({ error: "Missing FACEBOOK_ACCESS_TOKEN or FACEBOOK_AD_ACCOUNT_ID environment variable" });
+  }
+
+  // Facebook's Insights API only works if the account id is prefixed with
+  // "act_" — without it Facebook resolves the numeric id as a different
+  // kind of object that has no "insights" field, which is exactly the
+  // "(#100) Tried accessing nonexisting field (insights)" error. Add the
+  // prefix automatically so it doesn't matter which way it was typed in.
+  adAccountId = adAccountId.trim();
+  if (!adAccountId.startsWith("act_")) {
+    adAccountId = `act_${adAccountId}`;
   }
 
   // Optional query params: ?since=2026-09-01&until=2026-09-15
