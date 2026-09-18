@@ -116,7 +116,7 @@ const TABS=[
  {k:"web",label:"Web / Shopify",live:false},
  {k:"tiktok",label:"TikTok Shop",live:false},
  {k:"amazon",label:"Amazon",live:false},
- {k:"email",label:"Email / CRM",live:false}
+ {k:"email",label:"Email / CRM",live:true}
 ];
 
 // Shell config for every non-live tab: which KPI cards and table columns to show,
@@ -127,13 +127,12 @@ const SHELLS={
  tiktok:{kpis:["GMV","Orders","Units sold","Views","Conversion rate"],
   cols:["Date","GMV","Orders","Units sold","Views"]},
  amazon:{kpis:["Sales","Units sold","Sessions","Conversion rate","ACOS"],
-  cols:["Date","Sales","Units sold","Sessions","ACOS"]},
- email:{kpis:["Revenue","Campaigns sent","Open rate","Click rate","Unsubscribe rate"],
-  cols:["Campaign","Sent","Open rate","Click rate","Revenue"]}
+  cols:["Date","Sales","Units sold","Sessions","ACOS"]}
 };
 
 let tab="paid";
-let fbRows=[];
+let fbRows=[], fbError=null;
+let klaviyoRows=[], klaviyoError=null;
 
 function renderNav(){
  $("#nav").innerHTML=TABS.map(t=>
@@ -191,12 +190,41 @@ function paidMediaSection(){
  return `<div class="kpis">${kpis}</div>${table}`;
 }
 
+function emailSection(){
+ if(!klaviyoRows.length){
+  return `<div class="msg info">No Klaviyo email campaigns for this date range yet.</div>`;
+ }
+ const tot=klaviyoRows.reduce((a,r)=>({sent:a.sent+r.sent,opens:a.opens+r.opens,clicks:a.clicks+r.clicks,
+  unsubscribes:a.unsubscribes+r.unsubscribes,revenue:a.revenue+r.revenue}),
+  {sent:0,opens:0,clicks:0,unsubscribes:0,revenue:0});
+ const openRate=tot.sent?tot.opens/tot.sent:null;
+ const clickRate=tot.sent?tot.clicks/tot.sent:null;
+ const unsubRate=tot.sent?tot.unsubscribes/tot.sent:null;
+
+ const kpis=[["Revenue",money(tot.revenue)],["Campaigns sent",num(klaviyoRows.length)],
+  ["Open rate",pct(openRate)],["Click rate",pct(clickRate)],["Unsubscribe rate",pct(unsubRate)]
+ ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val">${val}</div></div>`).join("");
+
+ const sorted=[...klaviyoRows].sort((a,b)=>(b.date||"")<(a.date||"")?-1:1);
+ const table=`<div class="tw"><table><thead><tr>
+   <th>Campaign</th><th>Sent</th><th>Open rate</th><th>Click rate</th><th>Revenue</th></tr></thead><tbody>
+  ${sorted.map(r=>`<tr><td>${r.campaign}</td><td>${num(r.sent)}</td>
+   <td>${pct(r.open_rate)}</td><td>${pct(r.click_rate)}</td><td>${money(r.revenue)}</td></tr>`).join("")}
+  </tbody></table></div>`;
+
+ return `<div class="kpis">${kpis}</div>${table}`;
+}
+
 function overviewSection(){
  const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,purchase_value:a.purchase_value+r.purchase_value}),
   {spend:0,purchase_value:0});
  const roas=tot.spend?tot.purchase_value/tot.spend:null;
- const kpis=[["Total revenue","—"],["Ad spend",fbRows.length?money(tot.spend):"—"],
-  ["Blended ROAS",fbRows.length?ratio(roas):"—"],["Orders","—"],["New customers","—"],["Email revenue","—"]
+ const emailRevenue=klaviyoRows.reduce((a,r)=>a+r.revenue,0);
+ const totalRevenue=tot.purchase_value+emailRevenue;
+ const anyRevenue=fbRows.length||klaviyoRows.length;
+ const kpis=[["Total revenue",anyRevenue?money(totalRevenue):"—"],["Ad spend",fbRows.length?money(tot.spend):"—"],
+  ["Blended ROAS",fbRows.length?ratio(roas):"—"],["Orders","—"],["New customers","—"],
+  ["Email revenue",klaviyoRows.length?money(emailRevenue):"—"]
  ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val ${val==="—"?"dim":""}">${val}</div></div>`).join("");
 
  const rows=[
@@ -204,7 +232,7 @@ function overviewSection(){
   ["Web / Shopify","—","—","—"],
   ["TikTok Shop","—","—","—"],
   ["Amazon","—","—","—"],
-  ["Email / CRM","—","—","—"]
+  ["Email / CRM","—",klaviyoRows.length?money(emailRevenue):"—","—"]
  ];
  const table=`<div class="tw"><table><thead><tr>
    <th>Channel</th><th>Spend</th><th>Revenue</th><th>ROAS</th></tr></thead><tbody>
@@ -219,45 +247,55 @@ function renderMain(){
  const t=TABS.find(x=>x.k===tab);
  let body;
  if(tab==="paid")body=paidMediaSection();
+ else if(tab==="email")body=emailSection();
  else if(tab==="overview")body=overviewSection();
  else body=shellSection(tab,t.label);
 
  $("#main").innerHTML=`<section><div class="sechead"><h2>${t.label}</h2></div>${body}
   <div class="stale" id="stale"></div></section>`;
+
+ if(tab==="paid"&&fbError){
+  $("#main section").insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Facebook data.</b><br>${fbError}</div>`);
+ }
+ if(tab==="email"&&klaviyoError){
+  $("#main section").insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Klaviyo data.</b><br>${klaviyoError}</div>`);
+ }
 }
 
 function isoDaysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)}
 
-async function loadFacebook(){
+async function fetchRows(url){
+ try{
+  const res=await fetch(url);
+  const data=await res.json();
+  if(!res.ok||data.error)return{rows:[],error:(data&&data.error)||res.statusText};
+  return{rows:data.rows||[],error:null};
+ }catch(e){
+  return{rows:[],error:String(e)};
+ }
+}
+
+async function loadAll(){
  const days=Number($("#range").value);
  const since=isoDaysAgo(days-1), until=isoDaysAgo(0);
  $("#main").innerHTML=`<section><div class="sechead"><h2>${TABS.find(x=>x.k===tab).label}</h2></div>
   <div class="card"><div class="skel" style="width:38%"></div>
   <div class="skel" style="width:64%;margin-top:9px"></div></div></section>`;
- try{
-  const res=await fetch(`/api/facebook?since=${since}&until=${until}`);
-  const data=await res.json();
-  if(!res.ok||data.error){
-   fbRows=[];
-   renderMain();
-   const sec=$("#main section");
-   sec.insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Facebook data.</b><br>${(data&&data.error)||res.statusText}</div>`);
-   return;
-  }
-  fbRows=data.rows||[];
-  renderMain();
-  const st=$("#stale"); if(st)st.textContent="Last refreshed "+new Date().toLocaleTimeString();
- }catch(e){
-  fbRows=[];
-  renderMain();
-  const sec=$("#main section");
-  sec.insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Something went wrong.</b><br>${String(e)}</div>`);
- }
+
+ const[fb,kl]=await Promise.all([
+  fetchRows(`/api/facebook?since=${since}&until=${until}`),
+  fetchRows(`/api/klaviyo?since=${since}&until=${until}`)
+ ]);
+ fbRows=fb.rows; fbError=fb.error;
+ klaviyoRows=kl.rows; klaviyoError=kl.error;
+
+ renderMain();
+ const st=$("#stale"); if(st)st.textContent="Last refreshed "+new Date().toLocaleTimeString();
 }
 
-$("#refresh").addEventListener("click",loadFacebook);
-$("#range").addEventListener("change",loadFacebook);
+$("#refresh").addEventListener("click",loadAll);
+$("#range").addEventListener("change",loadAll);
 renderNav();
-loadFacebook();
+loadAll();
 </script>
 </body></html>
