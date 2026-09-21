@@ -9,7 +9,10 @@
  --ink:#12140f;--ink-2:#55584f;--ink-3:#8a8d82;
  --line:#e3e5dd;--line-strong:#c9ccc1;--accent:#0f5257;
  --good:#0ca30c;--good-bg:#e3f5e3;--good-fg:#0a6b0a;
+ --warn:#fab219;--warn-bg:#fdf1d6;--warn-fg:#7a5400;
+ --ser:#ec835a;--ser-bg:#fbe8df;--ser-fg:#8f4526;
  --crit:#d03b3b;--crit-bg:#fae4e4;--crit-fg:#9c2626;
+ --c-web:#2a78d6;--c-tiktok:#12855f;--c-amazon:#eb6834;--c-paid:#7c4dbd;--c-email:#00909e;
  --hd-bg:#0f5257;--hd-fg:#eaf5f4;
  --note-bg:#fdf8e0;--note-edge:#d9a520;--note-fg:#8a6608;
  --shadow:0 1px 2px rgba(18,20,15,.05)}
@@ -17,21 +20,25 @@
  --bg:#101210;--surface:#191c19;--surface-2:#20241f;--surface-3:#282c26;
  --ink:#f4f6f0;--ink-2:#b6bab0;--ink-3:#82867c;
  --line:#2b2f2a;--line-strong:#3d423b;--accent:#6fd3cf;
- --good-bg:#12301a;--good-fg:#4fd14f;--crit-bg:#331818;--crit-fg:#ef7676;
+ --good-bg:#12301a;--good-fg:#4fd14f;--warn-bg:#332812;--warn-fg:#f0ae2a;
+ --ser-bg:#33201a;--ser-fg:#ec835a;--crit-bg:#331818;--crit-fg:#ef7676;
+ --c-web:#5c9ff0;--c-tiktok:#3fbd8b;--c-amazon:#f0824f;--c-paid:#a882e0;--c-email:#2bb8c6;
  --hd-bg:#14484c;--hd-fg:#dff0ee;--shadow:none;
  --note-bg:#272117;--note-edge:#e3b544;--note-fg:#edc86a}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:Archivo,Arial,sans-serif;
  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
 .mono{font-family:"IBM Plex Mono",monospace}
 .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;
  text-transform:uppercase;color:var(--ink-3)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 header{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
 .hrow{display:flex;align-items:flex-end;gap:16px;padding:13px 0 11px;flex-wrap:wrap}
 .brand{margin-right:auto}
 .brand b{font-size:18px;font-weight:700;letter-spacing:-.025em;display:block}
 .ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type="date"]{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px}
 select,button{font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);
  border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;cursor:pointer}
 select:hover,button:hover{border-color:var(--ink-3)}
@@ -43,24 +50,27 @@ nav::-webkit-scrollbar{display:none}
  background:transparent;white-space:nowrap;display:flex;gap:7px;align-items:center;
  position:relative;cursor:pointer}
 .tab:hover{color:var(--ink);background:var(--surface-2)}
-.tab.on{color:var(--ink);font-weight:600;background:var(--bg);
+.tab[aria-selected="true"]{color:var(--ink);font-weight:600;background:var(--bg);
  border-color:var(--line);padding-bottom:11px;z-index:2}
-.tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--bg)}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--bg)}
 .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--line-strong)}
-.tab.on .dot{background:var(--good)}
-.tab .dot.off{background:var(--line-strong)}
-#main{padding:32px 24px 80px}
+.tab[aria-selected="true"] .dot.on{background:var(--good)}
+#main{padding:52px 24px 80px}
 section{margin-bottom:34px}
+section+section{padding-top:26px;border-top:1px solid var(--line)}
 .sechead{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 .sechead h2{font-size:16px;letter-spacing:-.02em;margin:0}
+.sechead .note{font-size:12.5px;color:var(--ink-3)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:11px;
  box-shadow:var(--shadow);padding:15px 17px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:11px;margin-bottom:20px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:11px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:11px;
  padding:12px 14px 11px;box-shadow:var(--shadow)}
 .kpi .lab{font-size:12px;color:var(--ink-2);font-weight:500}
 .kpi .val{font-size:25px;font-weight:600;letter-spacing:-.03em;line-height:1.18}
-.kpi .val.dim{color:var(--ink-3)}
+.kpi .sub{font-size:11.5px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.kpi.pending{border-style:dashed;background:transparent}
+.kpi.pending .val{color:var(--ink-3);font-weight:400}
 .tw{overflow-x:auto}
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:13.5px;min-width:440px}
 th{text-align:right;font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:600;
@@ -74,9 +84,11 @@ td:first-child{text-align:left;font-weight:500}
 tbody tr:last-child td{border-bottom:0}
 td.empty{text-align:center;color:var(--ink-3);font-style:italic}
 .msg{border-radius:10px;padding:13px 15px;font-size:13.5px;line-height:1.55;margin-bottom:16px}
+.msg b{font-weight:600}
 .msg.info{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.msg.warn{background:var(--warn-bg);color:var(--warn-fg)}
 .msg.err{background:var(--crit-bg);color:var(--crit-fg)}
-.msg.wait{background:var(--note-bg);color:var(--note-fg);border:1px solid var(--note-edge)}
+.msg.wait{background:var(--ser-bg);color:var(--ser-fg)}
 .stale{font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;margin-top:9px}
 .skel{background:var(--surface-3);border-radius:6px;height:1em;animation:p 1.4s ease-in-out infinite}
 @keyframes p{0%,100%{opacity:.55}50%{opacity:.95}}
@@ -87,72 +99,93 @@ td.empty{text-align:center;color:var(--ink-3);font-style:italic}
  <div class="hrow">
   <div class="brand"><span class="eyebrow">Launch tracker · live</span><b>More Nutrition US</b></div>
   <div class="ctrls">
-   <select id="range">
-    <option value="7">Last 7 days</option>
-    <option value="30" selected>Last 30 days</option>
-    <option value="90">Last 90 days</option>
+   <label class="sr" for="preset">Date range</label>
+   <select id="preset">
+    <option value="this_week">This week (Mon–Sun)</option>
+    <option value="last_week" selected>Last week (Mon–Sun)</option>
+    <option value="last_4w">Last 4 weeks</option>
+    <option value="last_8w">Last 8 weeks</option>
+    <option value="this_month">This month</option>
+    <option value="last_month">Last month</option>
+    <option value="custom">Custom range</option>
    </select>
-   <button id="refresh">Refresh</button>
+   <span id="custom" hidden style="display:inline-flex;gap:6px;align-items:center">
+    <label class="sr" for="from">From</label><input type="date" id="from">
+    <span style="color:var(--ink-3);font-size:12px">to</span>
+    <label class="sr" for="to">To</label><input type="date" id="to">
+   </span>
+   <button id="refresh" type="button">Refresh</button>
   </div>
  </div>
- <nav id="nav"></nav>
+ <nav id="nav" role="tablist" aria-label="Channels"></nav>
 </div></header>
 
 <main class="wrap" id="main"></main>
 
 <script>
-const $ = s => document.querySelector(s);
-const money = v => v==null||!isFinite(v) ? "—" : "$"+Math.round(v).toLocaleString("en-US");
-const num = v => v==null||!isFinite(v) ? "—" : Math.round(v).toLocaleString("en-US");
-const pct = v => v==null||!isFinite(v) ? "—" : (v*100).toFixed(2)+"%";
-const ratio = v => v==null||!isFinite(v) ? "—" : v.toFixed(2)+"x";
+const $=s=>document.querySelector(s);
+const money=v=>v==null||!isFinite(v)?"—":"$"+Math.round(v).toLocaleString("en-US");
+const num=v=>v==null||!isFinite(v)?"—":Math.round(v).toLocaleString("en-US");
+const pct=(v,d=1)=>v==null||!isFinite(v)?"—":(v*100).toFixed(d)+"%";
+const ratio=v=>v==null||!isFinite(v)?"—":v.toFixed(2)+"x";
+function kpi(lab,val,sub,pending){
+ return `<div class="kpi${pending?" pending":""}"><div class="lab">${lab}</div><div class="val n">${val}</div><div class="sub">${sub||""}</div></div>`;
+}
 
-// Tabs mirror the full dashboard's channel line-up. Only Paid media is wired to
-// a live source on this deployment right now — the others show their full shell
-// (KPI cards + table) with placeholder values until their data source is connected.
+/* ---------- date range presets (mirrors the artifact's picker) ---------- */
+const isoD=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const addD=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+function thisMonday(){const t=new Date();return addD(t,-((t.getDay()+6)%7))}
+function monthStart(d){return new Date(d.getFullYear(),d.getMonth(),1)}
+function monthEnd(d){return new Date(d.getFullYear(),d.getMonth()+1,0)}
+function resolveRange(preset){
+ const mon=thisMonday(),lastSun=addD(mon,-1),today=new Date();
+ const mk=(s,e,label)=>({start:isoD(s),end:isoD(e),label});
+ if(preset==="this_week")return mk(mon,today,"This week");
+ if(preset==="last_week")return mk(addD(mon,-7),lastSun,"Last week");
+ if(preset==="last_4w")return mk(addD(lastSun,-27),lastSun,"Last 4 weeks");
+ if(preset==="last_8w")return mk(addD(lastSun,-55),lastSun,"Last 8 weeks");
+ if(preset==="this_month")return mk(monthStart(today),today,"This month");
+ if(preset==="last_month"){const pm=monthStart(addD(monthStart(today),-1));return mk(pm,monthEnd(pm),"Last month")}
+ const f=$("#from").value,t=$("#to").value;
+ let s=new Date((f||isoD(addD(lastSun,-27)))+"T00:00:00");
+ let e=new Date((t||isoD(lastSun))+"T00:00:00");
+ if(e<s){const x=s;s=e;e=x}
+ return mk(s,e,"Custom");
+}
+
+/* Tab order matches the artifact: biggest-revenue channels first. */
 const TABS=[
  {k:"overview",label:"Overview",live:false},
- {k:"paid",label:"Paid media",live:true},
- {k:"web",label:"Web / Shopify",live:false},
  {k:"tiktok",label:"TikTok Shop",live:false},
  {k:"amazon",label:"Amazon",live:false},
+ {k:"web",label:"Web",live:false},
+ {k:"paid",label:"Paid media",live:true},
  {k:"email",label:"Email / CRM",live:true}
 ];
-
-// Shell config for every non-live tab: which KPI cards and table columns to show,
-// all populated with placeholder dashes until the real data source is wired up.
 const SHELLS={
- web:{kpis:["Revenue","Orders","AOV","Sessions","Conversion rate"],
-  cols:["Date","Revenue","Orders","AOV","Sessions"]},
- tiktok:{kpis:["GMV","Orders","Units sold","Views","Conversion rate"],
-  cols:["Date","GMV","Orders","Units sold","Views"]},
- amazon:{kpis:["Sales","Units sold","Sessions","Conversion rate","ACOS"],
-  cols:["Date","Sales","Units sold","Sessions","ACOS"]}
+ web:{kpis:["Revenue","Orders","AOV","Sessions","Conversion rate"],cols:["Date","Revenue","Orders","AOV","Sessions"]},
+ tiktok:{kpis:["GMV","Orders","Units sold","Views","Conversion rate"],cols:["Date","GMV","Orders","Units sold","Views"]},
+ amazon:{kpis:["Sales","Units sold","Sessions","Conversion rate","ACOS"],cols:["Date","Sales","Units sold","Sessions","ACOS"]}
 };
 
-let tab="paid";
-let fbRows=[], fbError=null;
-let klaviyoRows=[], klaviyoError=null;
+let tab="paid", R=resolveRange("last_week");
+let fbRows=[],fbError=null,klaviyoRows=[],klaviyoError=null;
 
 function renderNav(){
  $("#nav").innerHTML=TABS.map(t=>
-  `<div class="tab ${t.k===tab?"on":"off"}" data-tab="${t.k}"><span class="dot ${t.live?"":"off"}"></span>${t.label}</div>`
+  `<div class="tab" role="tab" aria-selected="${t.k===tab}" data-tab="${t.k}"><span class="dot ${t.live?"on":""}"></span>${t.label}</div>`
  ).join("");
  $("#nav").querySelectorAll(".tab").forEach(el=>{
-  el.addEventListener("click",()=>{
-   tab=el.dataset.tab; renderNav(); renderMain();
-  });
+  el.addEventListener("click",()=>{tab=el.dataset.tab;renderNav();renderMain()});
  });
 }
 
 function shellSection(key,label){
  const cfg=SHELLS[key];
- const kpis=cfg.kpis.map(lab=>
-  `<div class="kpi"><div class="lab">${lab}</div><div class="val dim">—</div></div>`
- ).join("");
+ const kpis=cfg.kpis.map(lab=>kpi(lab,"—","",true)).join("");
  const table=`<div class="tw"><table><thead><tr>
-   ${cfg.cols.map(c=>`<th>${c}</th>`).join("")}
-  </tr></thead><tbody>
+   ${cfg.cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>
    <tr><td class="empty" colspan="${cfg.cols.length}">No data yet — connect ${label} to populate this table</td></tr>
   </tbody></table></div>`;
  return `<div class="msg wait"><b>${label} isn't connected on this dashboard yet.</b> The layout below is ready to go — figures will populate here once its data source is wired up.</div>
@@ -160,9 +193,7 @@ function shellSection(key,label){
 }
 
 function paidMediaSection(){
- if(!fbRows.length){
-  return `<div class="msg info">No Facebook Ads data for this date range yet.</div>`;
- }
+ if(!fbRows.length)return `<div class="msg info">No Facebook Ads data for this date range yet.</div>`;
  const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,impressions:a.impressions+r.impressions,
   clicks:a.clicks+r.clicks,purchases:a.purchases+r.purchases,purchase_value:a.purchase_value+r.purchase_value}),
   {spend:0,impressions:0,clicks:0,purchases:0,purchase_value:0});
@@ -170,76 +201,63 @@ function paidMediaSection(){
  const cpc=tot.clicks?tot.spend/tot.clicks:null;
  const ctr=tot.impressions?tot.clicks/tot.impressions:null;
  const cpa=tot.purchases?tot.spend/tot.purchases:null;
-
  const kpis=[["Spend",money(tot.spend)],["Purchase value",money(tot.purchase_value)],
   ["ROAS",ratio(roas)],["Purchases",num(tot.purchases)],["Cost / purchase",money(cpa)],
-  ["Clicks",num(tot.clicks)],["CTR",pct(ctr)],["CPC",money(cpc)],["Impressions",num(tot.impressions)]
- ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val">${val}</div></div>`).join("");
-
+  ["Clicks",num(tot.clicks)],["CTR",pct(ctr,2)],["CPC",money(cpc)],["Impressions",num(tot.impressions)]
+ ].map(([lab,val])=>kpi(lab,val)).join("");
  const sorted=[...fbRows].sort((a,b)=>a.date<b.date?1:-1);
  const table=`<div class="tw"><table><thead><tr>
    <th>Date</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>CTR</th>
    <th>Purchases</th><th>Purchase value</th><th>ROAS</th></tr></thead><tbody>
-  ${sorted.map(r=>{
-   const rRoas=r.spend?r.purchase_value/r.spend:null, rCtr=r.impressions?r.clicks/r.impressions:null;
+  ${sorted.map(r=>{const rRoas=r.spend?r.purchase_value/r.spend:null,rCtr=r.impressions?r.clicks/r.impressions:null;
    return `<tr><td>${r.date}</td><td>${money(r.spend)}</td><td>${num(r.impressions)}</td>
-    <td>${num(r.clicks)}</td><td>${pct(rCtr)}</td><td>${num(r.purchases)}</td>
-    <td>${money(r.purchase_value)}</td><td>${ratio(rRoas)}</td></tr>`;
-  }).join("")}</tbody></table></div>`;
-
+    <td>${num(r.clicks)}</td><td>${pct(rCtr,2)}</td><td>${num(r.purchases)}</td>
+    <td>${money(r.purchase_value)}</td><td>${ratio(rRoas)}</td></tr>`}).join("")}
+  </tbody></table></div>`;
  return `<div class="kpis">${kpis}</div>${table}`;
 }
 
 function emailSection(){
- if(!klaviyoRows.length){
-  return `<div class="msg info">No Klaviyo email campaigns for this date range yet.</div>`;
- }
+ if(!klaviyoRows.length)return `<div class="msg info">No Klaviyo email campaigns for this date range yet.</div>`;
  const tot=klaviyoRows.reduce((a,r)=>({sent:a.sent+r.sent,opens:a.opens+r.opens,clicks:a.clicks+r.clicks,
   unsubscribes:a.unsubscribes+r.unsubscribes,revenue:a.revenue+r.revenue}),
   {sent:0,opens:0,clicks:0,unsubscribes:0,revenue:0});
- const openRate=tot.sent?tot.opens/tot.sent:null;
- const clickRate=tot.sent?tot.clicks/tot.sent:null;
- const unsubRate=tot.sent?tot.unsubscribes/tot.sent:null;
-
+ const openRate=tot.sent?tot.opens/tot.sent:null, clickRate=tot.sent?tot.clicks/tot.sent:null,
+  unsubRate=tot.sent?tot.unsubscribes/tot.sent:null;
  const kpis=[["Revenue",money(tot.revenue)],["Campaigns sent",num(klaviyoRows.length)],
-  ["Open rate",pct(openRate)],["Click rate",pct(clickRate)],["Unsubscribe rate",pct(unsubRate)]
- ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val">${val}</div></div>`).join("");
-
+  ["Open rate",pct(openRate)],["Click rate",pct(clickRate)],["Unsubscribe rate",pct(unsubRate,2)]
+ ].map(([lab,val])=>kpi(lab,val)).join("");
  const sorted=[...klaviyoRows].sort((a,b)=>(b.date||"")<(a.date||"")?-1:1);
  const table=`<div class="tw"><table><thead><tr>
    <th>Campaign</th><th>Sent</th><th>Open rate</th><th>Click rate</th><th>Revenue</th></tr></thead><tbody>
   ${sorted.map(r=>`<tr><td>${r.campaign}</td><td>${num(r.sent)}</td>
-   <td>${pct(r.open_rate)}</td><td>${pct(r.click_rate)}</td><td>${money(r.revenue)}</td></tr>`).join("")}
+   <td>${pct(r.open_rate)}</td><td>${pct(r.click_rate,2)}</td><td>${money(r.revenue)}</td></tr>`).join("")}
   </tbody></table></div>`;
-
  return `<div class="kpis">${kpis}</div>${table}`;
 }
 
 function overviewSection(){
- const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,purchase_value:a.purchase_value+r.purchase_value}),
-  {spend:0,purchase_value:0});
+ const tot=fbRows.reduce((a,r)=>({spend:a.spend+r.spend,purchase_value:a.purchase_value+r.purchase_value}),{spend:0,purchase_value:0});
  const roas=tot.spend?tot.purchase_value/tot.spend:null;
  const emailRevenue=klaviyoRows.reduce((a,r)=>a+r.revenue,0);
- const totalRevenue=tot.purchase_value+emailRevenue;
  const anyRevenue=fbRows.length||klaviyoRows.length;
- const kpis=[["Total revenue",anyRevenue?money(totalRevenue):"—"],["Ad spend",fbRows.length?money(tot.spend):"—"],
-  ["Blended ROAS",fbRows.length?ratio(roas):"—"],["Orders","—"],["New customers","—"],
-  ["Email revenue",klaviyoRows.length?money(emailRevenue):"—"]
- ].map(([lab,val])=>`<div class="kpi"><div class="lab">${lab}</div><div class="val ${val==="—"?"dim":""}">${val}</div></div>`).join("");
-
+ const totalRevenue=tot.purchase_value+emailRevenue;
+ const kpis=[["Total revenue",anyRevenue?money(totalRevenue):"—",null,!anyRevenue],
+  ["Ad spend",fbRows.length?money(tot.spend):"—",null,!fbRows.length],
+  ["Blended ROAS",fbRows.length?ratio(roas):"—",null,!fbRows.length],
+  ["Orders","—",null,true],["New customers","—",null,true],
+  ["Email revenue",klaviyoRows.length?money(emailRevenue):"—",null,!klaviyoRows.length]
+ ].map(([lab,val,sub,pending])=>kpi(lab,val,sub,pending)).join("");
  const rows=[
+  ["TikTok Shop","—","—","—"],["Amazon","—","—","—"],["Web","—","—","—"],
   ["Paid media",fbRows.length?money(tot.spend):"—",fbRows.length?money(tot.purchase_value):"—",fbRows.length?ratio(roas):"—"],
-  ["Web / Shopify","—","—","—"],
-  ["TikTok Shop","—","—","—"],
-  ["Amazon","—","—","—"],
   ["Email / CRM","—",klaviyoRows.length?money(emailRevenue):"—","—"]
  ];
  const table=`<div class="tw"><table><thead><tr>
    <th>Channel</th><th>Spend</th><th>Revenue</th><th>ROAS</th></tr></thead><tbody>
   ${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("")}
   </tbody></table></div>`;
-
- return `<div class="msg info">Overview blends every connected channel — right now that's just Paid media. Connect Shopify, TikTok, Amazon and Email to fill in the rest.</div>
+ return `<div class="msg info">Overview blends every connected channel — right now that's Paid media and Email/CRM. TikTok, Amazon and Web will fill in once they're connected.</div>
   <div class="kpis">${kpis}</div>${table}`;
 }
 
@@ -250,51 +268,41 @@ function renderMain(){
  else if(tab==="email")body=emailSection();
  else if(tab==="overview")body=overviewSection();
  else body=shellSection(tab,t.label);
-
- $("#main").innerHTML=`<section><div class="sechead"><h2>${t.label}</h2></div>${body}
+ $("#main").innerHTML=`<section><div class="sechead"><h2>${t.label}</h2><span class="note">${R.label} · ${R.start}–${R.end}</span></div>${body}
   <div class="stale" id="stale"></div></section>`;
-
- if(tab==="paid"&&fbError){
-  $("#main section").insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Facebook data.</b><br>${fbError}</div>`);
- }
- if(tab==="email"&&klaviyoError){
-  $("#main section").insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Klaviyo data.</b><br>${klaviyoError}</div>`);
- }
+ if(tab==="paid"&&fbError)$("#main section").insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Facebook data.</b><br>${fbError}</div>`);
+ if(tab==="email"&&klaviyoError)$("#main section").insertAdjacentHTML("afterbegin",`<div class="msg err"><b>Couldn't load Klaviyo data.</b><br>${klaviyoError}</div>`);
 }
-
-function isoDaysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)}
 
 async function fetchRows(url){
  try{
-  const res=await fetch(url);
-  const data=await res.json();
+  const res=await fetch(url);const data=await res.json();
   if(!res.ok||data.error)return{rows:[],error:(data&&data.error)||res.statusText};
   return{rows:data.rows||[],error:null};
- }catch(e){
-  return{rows:[],error:String(e)};
- }
+ }catch(e){return{rows:[],error:String(e)}}
 }
 
 async function loadAll(){
- const days=Number($("#range").value);
- const since=isoDaysAgo(days-1), until=isoDaysAgo(0);
+ R=resolveRange($("#preset").value);
  $("#main").innerHTML=`<section><div class="sechead"><h2>${TABS.find(x=>x.k===tab).label}</h2></div>
   <div class="card"><div class="skel" style="width:38%"></div>
   <div class="skel" style="width:64%;margin-top:9px"></div></div></section>`;
-
  const[fb,kl]=await Promise.all([
-  fetchRows(`/api/facebook?since=${since}&until=${until}`),
-  fetchRows(`/api/klaviyo?since=${since}&until=${until}`)
+  fetchRows(`/api/facebook?since=${R.start}&until=${R.end}`),
+  fetchRows(`/api/klaviyo?since=${R.start}&until=${R.end}`)
  ]);
- fbRows=fb.rows; fbError=fb.error;
- klaviyoRows=kl.rows; klaviyoError=kl.error;
-
+ fbRows=fb.rows;fbError=fb.error;klaviyoRows=kl.rows;klaviyoError=kl.error;
  renderMain();
- const st=$("#stale"); if(st)st.textContent="Last refreshed "+new Date().toLocaleTimeString();
+ const st=$("#stale");if(st)st.textContent="Last refreshed "+new Date().toLocaleTimeString();
 }
 
+$("#preset").addEventListener("change",()=>{
+ $("#custom").hidden=$("#preset").value!=="custom";
+ if($("#preset").value!=="custom")loadAll();
+});
+$("#from").addEventListener("change",loadAll);
+$("#to").addEventListener("change",loadAll);
 $("#refresh").addEventListener("click",loadAll);
-$("#range").addEventListener("change",loadAll);
 renderNav();
 loadAll();
 </script>
